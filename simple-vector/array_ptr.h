@@ -34,17 +34,13 @@ public:
 
     ArrayPtr& operator=(ArrayPtr&& other) noexcept {
         if (this != &other) {
-            delete[] raw_ptr_;
-            raw_ptr_ = other.raw_ptr_;
-            other.raw_ptr_ = nullptr;
+            std::swap(raw_ptr_, other.raw_ptr_);
         }
         return *this;
     }
 
     [[nodiscard]] Type* Release() noexcept {
-        Type* temp = raw_ptr_;
-        raw_ptr_ = nullptr;
-        return temp;
+        return std::exchange(raw_ptr_, nullptr);
     }
 
     Type& operator[](size_t index) noexcept {

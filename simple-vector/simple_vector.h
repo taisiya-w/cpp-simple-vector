@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <stdexcept>
 
-using namespace std;
-
 class ReserveProxyObj {
 public:
     explicit ReserveProxyObj(size_t capacity) :
@@ -46,16 +44,16 @@ public:
 
     SimpleVector(std::initializer_list<Type> init) 
     : items_(init.size()), size_(init.size()), capacity_(init.size()) {
-        copy(init.begin(), init.end(), items_.Get());
+        std::copy(init.begin(), init.end(), items_.Get());
     }
 
     SimpleVector(const SimpleVector& other) 
     : items_(other.size_), size_(other.size_), capacity_(other.capacity_) {
-        copy(other.begin(), other.end(), begin());
+        std::copy(other.begin(), other.end(), begin());
     }
 
     SimpleVector(SimpleVector&& other) noexcept
-    : items_(move(other.items_)), size_(other.size_), capacity_(other.capacity_) {
+    : items_(std::move(other.items_)), size_(other.size_), capacity_(other.capacity_) {
         other.size_ = 0;
         other.capacity_ = 0;
     }
@@ -87,19 +85,19 @@ public:
 
     SimpleVector& operator=(const SimpleVector& rhs) {
         if (this != &rhs) {
-            SimpleVector temp(rhs);
-            swap(temp);
+            if (rhs.IsEmpty()) {
+                Clear();
+            } else {
+                SimpleVector temp(rhs);
+                swap(temp);
+            }
         }
         return *this;
     }
 
     SimpleVector& operator=(SimpleVector&& rhs) {
         if (this != &rhs) {
-            items_ = move(rhs.items_);
-            size_ = rhs.size_;
-            capacity_ = rhs.capacity_;
-            rhs.size_ = 0;
-            rhs.capacity_ = 0;
+            swap(rhs);
         }
         return *this;
     }
@@ -130,14 +128,14 @@ public:
 
     Type& At(size_t index) {
         if (index >= size_) {
-            throw out_of_range("Index is out of range");
+            throw std::out_of_range("Index is out of range");
         }
         return items_.Get()[index];
     }
 
     const Type& At(size_t index) const {
         if (index >= size_) {
-            throw out_of_range("Index is out of range");
+            throw std::out_of_range("Index is out of range");
         }
         return items_.Get()[index];
     }
@@ -149,16 +147,12 @@ public:
     void Resize(size_t new_size) {
         if (new_size <= capacity_) {
             if (new_size > size_) {
-                for (size_t i = size_; i < new_size; i++) {
-                    items_.Get()[i] = Type();
-                }
+                std::generate(items_.Get() + size_, items_.Get() + new_size, [](){return Type();});
             }
             size_ = new_size;
         } else {
-            Reserve(max(new_size, 2*capacity_));
-            for (size_t i = size_; i < new_size; i++) {
-                    items_.Get()[i] = Type();
-            }
+            Reserve(std::max(new_size, 2*capacity_));
+            std::generate(items_.Get() + size_, items_.Get() + new_size, [](){return Type();});
             size_ = new_size;
         }
     }
@@ -166,7 +160,7 @@ public:
     void Reserve(size_t new_capacity) {
         if (new_capacity > capacity_) {
             ArrayPtr<Type> new_items(new_capacity);
-            move(begin(), end(), new_items.Get());
+            std::move(begin(), end(), new_items.Get());
             items_.swap(new_items);
             capacity_ = new_capacity;
         }
@@ -184,7 +178,7 @@ public:
         if (size_ == capacity_) {
             Reserve(capacity_ == 0 ? 1 : 2*capacity_);
         }
-        items_.Get()[size_] = move(item);
+        items_.Get()[size_] = std::move(item);
         ++size_;
     }
     
@@ -194,15 +188,13 @@ public:
         if (size_ == capacity_) {
             size_t new_capacity = (capacity_ == 0) ? 1 : 2*capacity_;
             ArrayPtr<Type> new_items(new_capacity);
-            move(begin(), begin() + index, new_items.Get());
+            std::move(begin(), begin() + index, new_items.Get());
             new_items.Get()[index] = value;
-            move(begin() + index, end(), new_items.Get() + index + 1);
+            std::move(begin() + index, end(), new_items.Get() + index + 1);
             items_.swap(new_items);
             capacity_ = new_capacity;
         } else {
-            for (size_t i = size_; i > index; --i) {
-                items_.Get()[i] = move(items_.Get()[i-1]);
-            }
+            std::move_backward(begin() + index, end(), end() + 1);
             items_.Get()[index] = value;
         }
         ++size_;
@@ -215,16 +207,14 @@ public:
         if (size_ == capacity_) {
             size_t new_capacity = (capacity_ == 0) ? 1 : 2*capacity_;
             ArrayPtr<Type> new_items(new_capacity);
-            move(begin(), begin() + index, new_items.Get());
-            new_items.Get()[index] = move(value);
-            move(begin() + index, end(), new_items.Get() + index + 1);
+            std::move(begin(), begin() + index, new_items.Get());
+            new_items.Get()[index] = std::move(value);
+            std::move(begin() + index, end(), new_items.Get() + index + 1);
             items_.swap(new_items);
             capacity_ = new_capacity;
         } else {
-            for (size_t i = size_; i > index; --i) {
-                items_.Get()[i] = move(items_.Get()[i-1]);
-            }
-            items_.Get()[index] = move(value);
+            std::move_backward(begin() + index, end(), end() + 1);
+            items_.Get()[index] = std::move(value);
         }
         ++size_;
         return begin() + index;
@@ -236,11 +226,9 @@ public:
     }
 
     Iterator Erase(ConstIterator pos) {
-        assert(pos >= begin() && pos <= end());
+        assert(pos >= begin() && pos < end());
         size_t index = pos - begin();
-        for (size_t i = index; i < size_ - 1; ++i) {
-            items_.Get()[i] = move(items_.Get()[i + 1]);
-        }
+        std::move(begin() + index + 1, end(), begin() + index);
         --size_;
         return begin() + index;
         
